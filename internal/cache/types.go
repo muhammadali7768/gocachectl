@@ -2,15 +2,6 @@ package cache
 
 import "time"
 
-// UnifiedStats contains statistics for all Go caches
-type UnifiedStats struct {
-	BuildCache BuildCacheStats `json:"build_cache"`
-	ModCache   ModCacheStats   `json:"module_cache"`
-	TestCache  TestCacheStats  `json:"test_cache"`
-	TotalSize  int64           `json:"total_size"`
-	TotalCount int             `json:"total_count"`
-}
-
 // BuildCacheStats contains build cache statistics
 type BuildCacheStats struct {
 	Location     string           `json:"location"`
@@ -39,6 +30,10 @@ type TestCacheStats struct {
 	OldestEntry time.Time `json:"oldest_entry"`
 	NewestEntry time.Time `json:"newest_entry"`
 }
+
+func (s BuildCacheStats) Type() string { return "build" }
+func (s ModCacheStats) Type() string   { return "module" }
+func (s TestCacheStats) Type() string  { return "test" }
 
 // SizeDistribution tracks distribution of cache entries by size
 type SizeDistribution struct {
