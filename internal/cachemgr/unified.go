@@ -3,91 +3,69 @@ package cachemgr
 import (
 	"fmt"
 
-	"github.com/muhammadali7768/gocachectl/internal/buildcache"
 	"github.com/muhammadali7768/gocachectl/internal/cache"
-	"github.com/muhammadali7768/gocachectl/internal/modcache"
-	"github.com/muhammadali7768/gocachectl/internal/testcache"
 )
 
-// UnifiedManager coordinates all cache operations
+// UnifiedManager acts as a high-level consumer that works with any cache.Manager.
 type UnifiedManager struct {
-	buildCache *buildcache.Manager
-	modCache   *modcache.Manager
-	testCache  *testcache.Manager
+	managers []cache.CacheManager
 }
 
-// NewUnifiedManager creates a new unified cache manager
+// NewUnifiedManager constructs all cache managers and registers them.
 func NewUnifiedManager() (*UnifiedManager, error) {
+	var managers []cache.CacheManager
 	// Initialize build cache manager
-	buildMgr, err := buildcache.NewManager("")
+	buildMgr, err := cache.NewBuildManager("")
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize build cache: %w", err)
 	}
 
+	managers = append(managers, buildMgr)
 	// Initialize module cache manager
-	modMgr, err := modcache.NewManager("")
+	modMgr, err := cache.NewModManager("")
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize module cache: %w", err)
 	}
 
+	managers = append(managers, modMgr)
 	// Initialize test cache manager
-	testMgr, err := testcache.NewManager("")
+	testMgr, err := cache.NewTestManager("")
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize test cache: %w", err)
 	}
 
+	managers = append(managers, testMgr)
 	return &UnifiedManager{
-		buildCache: buildMgr,
-		modCache:   modMgr,
-		testCache:  testMgr,
+		managers: managers,
 	}, nil
 }
 
-// GetAllStats retrieves statistics for all caches
-func (m *UnifiedManager) GetAllStats() (*cache.UnifiedStats, error) {
-	stats := &cache.UnifiedStats{}
+// GetAllStats returns stats for all caches providers
+func (m *UnifiedManager) GetAllStats() ([]cache.Stats, error) {
+	var all []cache.Stats
 
-	// Get build cache stats
-	buildStats, err := m.buildCache.GetStats()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get build cache stats: %w", err)
+	for _, mgr := range m.managers {
+		stat, err := mgr.GetStats()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get stats for %T: %w", mgr, err)
+		}
+		all = append(all, stat)
 	}
-	stats.BuildCache = *buildStats
-
-	// Get module cache stats
-	modStats, err := m.modCache.GetStats()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get module cache stats: %w", err)
-	}
-	stats.ModCache = *modStats
-
-	// Get test cache stats
-	testStats, err := m.testCache.GetStats()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get test cache stats: %w", err)
-	}
-	stats.TestCache = *testStats
-
-	// Calculate totals
-	stats.TotalSize = buildStats.Size + modStats.Size + testStats.Size
-	stats.TotalCount = buildStats.EntryCount + modStats.ModuleCount + testStats.EntryCount
-
-	return stats, nil
+	return all, nil
 }
 
-// GetBuildStats retrieves only build cache statistics
-func (m *UnifiedManager) GetBuildStats() (*cache.BuildCacheStats, error) {
-	return m.buildCache.GetStats()
-}
-
-// GetModuleStats retrieves only module cache statistics
-func (m *UnifiedManager) GetModuleStats() (*cache.ModCacheStats, error) {
-	return m.modCache.GetStats()
-}
-
-// GetTestStats retrieves only test cache statistics
-func (m *UnifiedManager) GetTestStats() (*cache.TestCacheStats, error) {
-	return m.testCache.GetStats()
+// GetStatsByType retrieves the stats for a specific type ("mod", "build", "test").
+func (m *UnifiedManager) GetStatsByType(kind string) (cache.Stats, error) {
+	for _, mgr := range m.managers {
+		stats, err := mgr.GetStats()
+		if err != nil {
+			return nil, err
+		}
+		if stats.Type() == kind {
+			return stats, nil
+		}
+	}
+	return nil, fmt.Errorf("no stats found for type: %s", kind)
 }
 
 // GetCacheInfo retrieves cache location information
@@ -123,38 +101,41 @@ func (m *UnifiedManager) GetCacheInfo() (*cache.CacheInfo, error) {
 }
 
 // Clear removes cache entries based on options
+
 func (m *UnifiedManager) Clear(opts cache.ClearOptions) (*cache.ClearResult, error) {
 	result := &cache.ClearResult{}
 
-	// Clear build cache
-	if opts.Build || opts.All {
-		deleted, freed, err := m.buildCache.Clear()
+	for _, mgr := range m.managers {
+		stats, err := mgr.GetStats()
 		if err != nil {
 			result.Errors++
-		} else {
-			result.BuildDeleted = deleted
-			result.TotalFreed += freed
+			continue
 		}
-	}
 
-	// Clear module cache
-	if opts.Modules || opts.All {
-		deleted, freed, err := m.modCache.Clear()
-		if err != nil {
-			result.Errors++
-		} else {
-			result.ModulesDeleted = deleted
-			result.TotalFreed += freed
-		}
-	}
+		kind := stats.Type()
 
-	// Clear test cache
-	if opts.Test || opts.All {
-		deleted, freed, err := m.testCache.Clear()
-		if err != nil {
-			result.Errors++
-		} else {
-			result.TestDeleted = deleted
+		// Decide whether to clear this manager
+		if opts.All ||
+			(kind == "build" && opts.Build) ||
+			(kind == "module" && opts.Modules) ||
+			(kind == "test" && opts.Test) {
+
+			deleted, freed, err := mgr.Clear()
+			if err != nil {
+				result.Errors++
+				continue
+			}
+
+			// Update fields based on type
+			switch kind {
+			case "build":
+				result.BuildDeleted += deleted
+			case "module":
+				result.ModulesDeleted += deleted
+			case "test":
+				result.TestDeleted += deleted
+			}
+
 			result.TotalFreed += freed
 		}
 	}

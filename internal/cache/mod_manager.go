@@ -1,4 +1,4 @@
-package modcache
+package cache
 
 import (
 	"fmt"
@@ -6,19 +6,19 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-
-	"github.com/muhammadali7768/gocachectl/internal/cache"
 )
 
 // Manager manages the Go module cache
-type Manager struct {
+type ModManager struct {
 	cacheDir string
 }
 
+var _ CacheManager = (*ModManager)(nil)
+
 // NewManager creates a new module cache manager
-func NewManager(cacheDir string) (*Manager, error) {
+func NewModManager(cacheDir string) (*ModManager, error) {
 	if cacheDir == "" {
-		dir, err := cache.GetGoEnv("GOMODCACHE")
+		dir, err := GetGoEnv("GOMODCACHE")
 		if err != nil {
 			return nil, fmt.Errorf("failed to get GOMODCACHE: %w", err)
 		}
@@ -30,18 +30,18 @@ func NewManager(cacheDir string) (*Manager, error) {
 		return nil, fmt.Errorf("module cache directory does not exist: %s", cacheDir)
 	}
 
-	return &Manager{
+	return &ModManager{
 		cacheDir: cacheDir,
 	}, nil
 }
 
 // GetStats retrieves module cache statistics
-func (m *Manager) GetStats() (*cache.ModCacheStats, error) {
-	stats := &cache.ModCacheStats{
+func (m *ModManager) GetStats() (Stats, error) {
+	stats := &ModCacheStats{
 		Location: m.cacheDir,
 	}
 
-	moduleMap := make(map[string]*cache.ModuleInfo)
+	moduleMap := make(map[string]*ModuleInfo)
 
 	// Walk the cache directory
 	err := filepath.WalkDir(m.cacheDir, func(path string, d fs.DirEntry, err error) error {
@@ -86,7 +86,7 @@ func (m *Manager) GetStats() (*cache.ModCacheStats, error) {
 				if mod, exists := moduleMap[modulePath]; exists {
 					mod.Size += info.Size()
 				} else {
-					moduleMap[modulePath] = &cache.ModuleInfo{
+					moduleMap[modulePath] = &ModuleInfo{
 						Path: modulePath,
 						Size: info.Size(),
 					}
@@ -111,7 +111,7 @@ func (m *Manager) GetStats() (*cache.ModCacheStats, error) {
 }
 
 // Clear removes all module cache entries
-func (m *Manager) Clear() (int, int64, error) {
+func (m *ModManager) Clear() (int, int64, error) {
 	var deletedCount int
 	var freedSpace int64
 
@@ -152,14 +152,14 @@ func (m *Manager) Clear() (int, int64, error) {
 }
 
 // GetLocation returns the cache directory path
-func (m *Manager) GetLocation() string {
+func (m *ModManager) GetLocation() string {
 	return m.cacheDir
 }
 
 // getTopModules returns the N largest modules by size
-func getTopModules(modules map[string]*cache.ModuleInfo, n int) []cache.ModuleInfo {
+func getTopModules(modules map[string]*ModuleInfo, n int) []ModuleInfo {
 	// Convert map to slice
-	var moduleList []cache.ModuleInfo
+	var moduleList []ModuleInfo
 	for _, mod := range modules {
 		moduleList = append(moduleList, *mod)
 	}

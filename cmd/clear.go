@@ -61,7 +61,7 @@ func runClear(cmd *cobra.Command, args []string) error {
 	}
 
 	// Get current stats before clearing
-	var stats *cache.UnifiedStats
+	var stats []cache.Stats
 	if !quiet {
 		stats, err = manager.GetAllStats()
 		if err != nil {
@@ -74,32 +74,31 @@ func runClear(cmd *cobra.Command, args []string) error {
 		fmt.Println("Cache entries to be cleared:")
 		fmt.Println("============================")
 		fmt.Println()
-
-		if clearAll || clearBuild {
-			fmt.Printf("📦 Build Cache:  %s (%s entries)\n",
-				cache.FormatBytes(stats.BuildCache.Size),
-				cache.FormatCount(stats.BuildCache.EntryCount))
-		}
-		if clearAll || clearMod {
-			fmt.Printf("📚 Module Cache: %s (%s modules)\n",
-				cache.FormatBytes(stats.ModCache.Size),
-				cache.FormatCount(stats.ModCache.ModuleCount))
-		}
-		if clearAll || clearTest {
-			fmt.Printf("🧪 Test Cache:   %s (%s entries)\n",
-				cache.FormatBytes(stats.TestCache.Size),
-				cache.FormatCount(stats.TestCache.EntryCount))
-		}
-
 		totalSize := int64(0)
-		if clearAll || clearBuild {
-			totalSize += stats.BuildCache.Size
-		}
-		if clearAll || clearMod {
-			totalSize += stats.ModCache.Size
-		}
-		if clearAll || clearTest {
-			totalSize += stats.TestCache.Size
+		for _, stat := range stats {
+			switch stat := stat.(type) {
+			case *cache.BuildCacheStats:
+				if clearAll || clearBuild {
+					totalSize += stat.Size
+					fmt.Printf("Build Cache:  %s (%s entries)\n",
+						cache.FormatBytes(stat.Size),
+						cache.FormatCount(stat.EntryCount))
+				}
+			case *cache.ModCacheStats:
+				if clearAll || clearMod {
+					totalSize += stat.Size
+					fmt.Printf("Module Cache: %s (%s modules)\n",
+						cache.FormatBytes(stat.Size),
+						cache.FormatCount(stat.ModuleCount))
+				}
+			case *cache.TestCacheStats:
+				if clearAll || clearTest {
+					totalSize += stat.Size
+					fmt.Printf("Test Cache:   %s (%s entries)\n",
+						cache.FormatBytes(stat.Size),
+						cache.FormatCount(stat.EntryCount))
+				}
+			}
 		}
 
 		fmt.Println()
@@ -153,20 +152,20 @@ func runClear(cmd *cobra.Command, args []string) error {
 		fmt.Println()
 
 		if clearAll || clearBuild {
-			fmt.Printf("📦 Build Cache:  %s entries deleted\n", cache.FormatCount(result.BuildDeleted))
+			fmt.Printf("Build Cache:  %s entries deleted\n", cache.FormatCount(result.BuildDeleted))
 		}
 		if clearAll || clearMod {
-			fmt.Printf("📚 Module Cache: %s entries deleted\n", cache.FormatCount(result.ModulesDeleted))
+			fmt.Printf("Module Cache: %s entries deleted\n", cache.FormatCount(result.ModulesDeleted))
 		}
 		if clearAll || clearTest {
-			fmt.Printf("🧪 Test Cache:   %s entries deleted\n", cache.FormatCount(result.TestDeleted))
+			fmt.Printf("Test Cache:   %s entries deleted\n", cache.FormatCount(result.TestDeleted))
 		}
 
 		fmt.Println()
 		fmt.Printf("Total space freed: %s\n", cache.FormatBytes(result.TotalFreed))
 
 		if result.Errors > 0 {
-			fmt.Printf("\n⚠️  Warning: %d errors occurred during clearing\n", result.Errors)
+			fmt.Printf("\n Warning: %d errors occurred during clearing\n", result.Errors)
 		}
 	}
 

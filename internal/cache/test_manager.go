@@ -1,4 +1,4 @@
-package testcache
+package cache
 
 import (
 	"fmt"
@@ -7,19 +7,19 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-
-	"github.com/muhammadali7768/gocachectl/internal/cache"
 )
 
 // Manager manages the Go test cache (part of build cache)
-type Manager struct {
+type TestManager struct {
 	cacheDir string
 }
 
+var _ CacheManager = (*TestManager)(nil)
+
 // NewManager creates a new test cache manager
-func NewManager(cacheDir string) (*Manager, error) {
+func NewTestManager(cacheDir string) (*TestManager, error) {
 	if cacheDir == "" {
-		dir, err := cache.GetGoEnv("GOCACHE")
+		dir, err := GetGoEnv("GOCACHE")
 		if err != nil {
 			return nil, fmt.Errorf("failed to get GOCACHE: %w", err)
 		}
@@ -31,14 +31,14 @@ func NewManager(cacheDir string) (*Manager, error) {
 		return nil, fmt.Errorf("test cache directory does not exist: %s", cacheDir)
 	}
 
-	return &Manager{
+	return &TestManager{
 		cacheDir: cacheDir,
 	}, nil
 }
 
 // GetStats retrieves test cache statistics
-func (m *Manager) GetStats() (*cache.TestCacheStats, error) {
-	stats := &cache.TestCacheStats{
+func (m *TestManager) GetStats() (Stats, error) {
+	stats := &TestCacheStats{
 		Location:    m.cacheDir,
 		OldestEntry: time.Now(),
 	}
@@ -95,7 +95,7 @@ func (m *Manager) GetStats() (*cache.TestCacheStats, error) {
 }
 
 // Clear removes test cache entries
-func (m *Manager) Clear() (int, int64, error) {
+func (m *TestManager) Clear() (int, int64, error) {
 	var deletedCount int
 	var freedSpace int64
 
@@ -136,7 +136,7 @@ func (m *Manager) Clear() (int, int64, error) {
 }
 
 // GetLocation returns the cache directory path
-func (m *Manager) GetLocation() string {
+func (m *TestManager) GetLocation() string {
 	return m.cacheDir
 }
 

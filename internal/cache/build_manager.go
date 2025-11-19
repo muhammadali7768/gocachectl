@@ -1,4 +1,4 @@
-package buildcache
+package cache
 
 import (
 	"fmt"
@@ -6,19 +6,19 @@ import (
 	"os"
 	"path/filepath"
 	"time"
-
-	"github.com/muhammadali7768/gocachectl/internal/cache"
 )
 
 // Manager manages the Go build cache
-type Manager struct {
+type BuildManager struct {
 	cacheDir string
 }
 
+var _ CacheManager = (*BuildManager)(nil)
+
 // NewManager creates a new build cache manager
-func NewManager(cacheDir string) (*Manager, error) {
+func NewBuildManager(cacheDir string) (*BuildManager, error) {
 	if cacheDir == "" {
-		dir, err := cache.GetGoEnv("GOCACHE")
+		dir, err := GetGoEnv("GOCACHE")
 		if err != nil {
 			return nil, fmt.Errorf("failed to get GOCACHE: %w", err)
 		}
@@ -30,14 +30,14 @@ func NewManager(cacheDir string) (*Manager, error) {
 		return nil, fmt.Errorf("build cache directory does not exist: %s", cacheDir)
 	}
 
-	return &Manager{
+	return &BuildManager{
 		cacheDir: cacheDir,
 	}, nil
 }
 
 // GetStats retrieves build cache statistics
-func (m *Manager) GetStats() (*cache.BuildCacheStats, error) {
-	stats := &cache.BuildCacheStats{
+func (m *BuildManager) GetStats() (Stats, error) {
+	stats := &BuildCacheStats{
 		Location:    m.cacheDir,
 		OldestEntry: time.Now(),
 	}
@@ -106,7 +106,7 @@ func (m *Manager) GetStats() (*cache.BuildCacheStats, error) {
 }
 
 // Clear removes all build cache entries
-func (m *Manager) Clear() (int, int64, error) {
+func (m *BuildManager) Clear() (int, int64, error) {
 	var deletedCount int
 	var freedSpace int64
 
@@ -147,6 +147,6 @@ func (m *Manager) Clear() (int, int64, error) {
 }
 
 // GetLocation returns the cache directory path
-func (m *Manager) GetLocation() string {
+func (m *BuildManager) GetLocation() string {
 	return m.cacheDir
 }
