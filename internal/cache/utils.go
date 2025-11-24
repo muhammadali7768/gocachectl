@@ -52,7 +52,7 @@ func FormatCount(count int) string {
 	if count < 1000 {
 		return fmt.Sprintf("%d", count)
 	}
-	return fmt.Sprintf("%s", addCommas(count))
+	return addCommas(count)
 }
 
 func addCommas(n int) string {

@@ -53,6 +53,11 @@ func (m *BuildManager) GetStats() (Stats, error) {
 			return nil
 		}
 
+		// Exclude test entries
+		if isTestEntry(path) {
+			return nil
+		}
+
 		// Get file info
 		info, err := d.Info()
 		if err != nil {
@@ -122,6 +127,11 @@ func (m *BuildManager) Clear() (int, int64, error) {
 
 		// Skip directories (will be removed if empty)
 		if d.IsDir() {
+			return nil
+		}
+
+		// Skip test cache entries
+		if isTestEntry(path) {
 			return nil
 		}
 

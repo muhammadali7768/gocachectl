@@ -2,6 +2,7 @@ package cache
 
 import (
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -143,20 +144,65 @@ func (m *TestManager) GetLocation() string {
 // isTestEntry attempts to determine if a cache entry is test-related
 // This is heuristic-based since Go's cache format is internal
 func isTestEntry(path string) bool {
-	base := filepath.Base(path)
+	// Test cache entries must end with "-d" (data/output)
+	// Build artifacts also end with "-d" or "-a", so we need to check content
+	if !strings.HasSuffix(path, "-d") {
+		return false
+	}
 
-	// Test cache entries often have specific patterns
-	// They typically end with "-a" or "-d" and are in subdirectories
-	if strings.HasSuffix(base, "-a") || strings.HasSuffix(base, "-d") {
-		// Check if path contains "test" indicators
-		if strings.Contains(path, string(os.PathSeparator)+"test"+string(os.PathSeparator)) {
-			return true
-		}
+	// Open file to check header
+	f, err := os.Open(path)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
 
-		// Check for longer hash patterns typical of test entries
-		if len(base) > 40 {
-			return true
-		}
+	// Read first 512 bytes (enough for header checks)
+	buf := make([]byte, 512)
+	n, err := f.Read(buf)
+	if err != nil && err != io.EOF {
+		return false
+	}
+	header := buf[:n]
+
+	// Check for known binary/metadata headers to EXCLUDE
+	if len(header) >= 7 && string(header[:7]) == "!<arch>" {
+		return false
+	}
+	if len(header) >= 4 && string(header[:4]) == "\x7fELF" {
+		return false
+	}
+	if len(header) >= 2 && string(header[:2]) == "\r\xff" { // GOB/Binary data
+		return false
+	}
+	if len(header) >= 9 && string(header[:9]) == "go object" {
+		return false
+	}
+	if len(header) >= 8 && string(header[:8]) == "go index" {
+		return false
+	}
+	if len(header) >= 3 && string(header[:3]) == "v1 " { // Action graph/metadata
+		return false
+	}
+	if len(header) >= 2 && string(header[:2]) == "./" { // Source file list
+		return false
+	}
+
+	// Check for known test output patterns to INCLUDE
+	// Standard success: "ok \t" or "ok "
+	if len(header) >= 3 && string(header[:3]) == "ok " {
+		return true
+	}
+	if len(header) >= 3 && string(header[:3]) == "ok\t" {
+		return true
+	}
+	// Verbose output: "=== RUN"
+	if len(header) >= 7 && string(header[:7]) == "=== RUN" {
+		return true
+	}
+	// Failure (rarely cached, but possible): "FAIL"
+	if len(header) >= 4 && string(header[:4]) == "FAIL" {
+		return true
 	}
 
 	return false
